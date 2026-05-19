@@ -127,7 +127,13 @@ app.get('/api/books/:id/file', (req, res) => {
   const filePath = join(BOOKS_DIR, req.params.id);
   if (!existsSync(filePath)) return res.status(404).json({ error: 'file missing' });
   res.set('Content-Type', row.mime_type || 'application/octet-stream');
-  res.set('Content-Disposition', `attachment; filename="${row.filename}"`);
+
+  // Sanitize filename for the Content-Disposition header: Node's HTTP layer
+  // rejects non-ASCII bytes (e.g. typographic quotes in book filenames).
+  const safeName = String(row.filename || 'book').replace(/[^\x20-\x7E]/g, '_');
+  const encodedName = encodeURIComponent(row.filename || 'book');
+  res.set('Content-Disposition', `attachment; filename="${safeName}"; filename*=UTF-8''${encodedName}`);
+
   res.send(readFileSync(filePath));
 });
 
