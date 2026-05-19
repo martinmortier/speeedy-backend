@@ -15,8 +15,7 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 const AUTH_TOKEN = process.env.AUTH_TOKEN || '';
 
 if (!AUTH_TOKEN) {
-  console.error('FATAL: AUTH_TOKEN env var is required');
-  process.exit(1);
+  console.warn('WARNING: AUTH_TOKEN env var is empty — server runs without auth (open to anyone with network access).');
 }
 
 mkdirSync(BOOKS_DIR, { recursive: true });
@@ -47,9 +46,10 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
-// Auth middleware
+// Auth middleware (skipped when no AUTH_TOKEN is configured)
 app.use((req, res, next) => {
   if (req.path === '/health') return next();
+  if (!AUTH_TOKEN) return next();
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
   if (token !== AUTH_TOKEN) {
