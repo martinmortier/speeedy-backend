@@ -45,6 +45,7 @@ db.exec(`
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
+app.use(express.text({ type: ['text/plain', 'application/octet-stream'], limit: '2mb' }));
 
 // Auth middleware (skipped when no AUTH_TOKEN is configured)
 app.use((req, res, next) => {
@@ -135,6 +136,41 @@ app.get('/api/books/:id/file', (req, res) => {
   res.set('Content-Disposition', `attachment; filename="${safeName}"; filename*=UTF-8''${encodedName}`);
 
   res.send(readFileSync(filePath));
+});
+
+function applyPositionUpdate(id, body) {
+  const row = db.prepare('SELECT id FROM books WHERE id = ?').get(id);
+  if (!row) return false;
+
+  const { position_word, position_total, position_chapter, wpm, title, metadata } = body || {};
+  const updates = [];
+  const values = [];
+
+  if (Number.isFinite(position_word)) { updates.push('position_word = ?'); values.push(position_word); }
+  if (Number.isFinite(position_total)) { updates.push('position_total = ?'); values.push(position_total); }
+  if (typeof position_chapter === 'string') { updates.push('position_chapter = ?'); values.push(position_chapter); }
+  if (Number.isFinite(wpm)) { updates.push('wpm = ?'); values.push(wpm); }
+  if (typeof title === 'string' && title.trim()) { updates.push('title = ?'); values.push(title.trim()); }
+  if (metadata !== undefined) { updates.push('metadata_json = ?'); values.push(metadata == null ? null : JSON.stringify(metadata)); }
+
+  updates.push('last_read_at = ?');
+  values.push(Date.now());
+  values.push(id);
+
+  db.prepare(`UPDATE books SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+  return true;
+}
+
+// Beacon endpoint: POST so navigator.sendBeacon works on unload. Body is JSON.
+app.post('/api/books/:id/beacon', (req, res) => {
+  // Beacon may send Content-Type: text/plain; manually parse if needed.
+  let body = req.body;
+  if ((!body || Object.keys(body).length === 0) && typeof req.body === 'string') {
+    try { body = JSON.parse(req.body); } catch { body = {}; }
+  }
+  const ok = applyPositionUpdate(req.params.id, body);
+  if (!ok) return res.status(404).json({ error: 'not found' });
+  res.status(204).end();
 });
 
 // Update reading position
