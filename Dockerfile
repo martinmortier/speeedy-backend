@@ -14,7 +14,9 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV DATA_DIR=/data
 
-VOLUME ["/data"]
+# /data is provided by a named volume mounted via custom_docker_run_options in Coolify.
+# Intentionally NOT declared as VOLUME here to avoid creating anonymous volumes
+# that take precedence and lose data across redeploys.
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
